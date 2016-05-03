@@ -128,14 +128,13 @@ function Get-Python {
     process {
         $versions = New-Object System.Collections.Generic.List[PSObject]
         
-        $nativeKeys = Get-ChildItem -Path Registry::HKLM\Software\Python\PythonCore\ -ErrorAction "SilentlyContinue"
-        foreach ($key in $nativeKeys) {
-            $versions.Add((createCPythonVersion $key))
-        }
+        [Microsoft.Win32.RegistryKey[]]$regKeys = Get-ChildItem -Path Registry::HKLM\Software\Python\PythonCore\ -ErrorAction "SilentlyContinue"
+        [Microsoft.Win32.RegistryKey[]]$regKeys = $regKeys + (Get-ChildItem -Path Registry::HKLM\SOFTWARE\Wow6432Node\Python\PythonCore\ -ErrorAction "SilentlyContinue")
         
-        $wowKeys = Get-ChildItem -Path Registry::HKLM\SOFTWARE\Wow6432Node\Python\PythonCore\ -ErrorAction "SilentlyContinue"
-        foreach ($key in $wowKeys) {
-            $versions.Add((createCPythonVersion $key))
+        foreach ($key in $regKeys) {
+            if (Test-Path ("Registry::" + (Join-Path $key.Name "\InstallPath"))) {
+                $versions.Add((createCPythonVersion $key))
+            }
         }
 
         ($versions | 
