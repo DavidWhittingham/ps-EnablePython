@@ -1,17 +1,17 @@
-Set-StrictMode -Version 3.0
+Set-StrictMode -Version 2.0
 
 $OLD_ENV_PATH = $null
 
 function Disable-Python {
-    <#
-    .SYNOPSIS
-    Disables any Python version enabled by the Enable-Python function.
+<#
+.SYNOPSIS
+Disables any Python version enabled by the Enable-Python function.
 
-    .DESCRIPTION
-    The Disable-Python function restores the original PATH environment variable, removing any changes made by running the Enable-Python function.
+.DESCRIPTION
+The Disable-Python function restores the original PATH environment variable, removing any changes made by running the Enable-Python function.
 
-    It will also check for the existance of a 'deactivate' function, and it will call it if it exists (assuming that it is from the virtualenv activate.ps1' script).
-    #>
+It will also check for the existance of a 'deactivate' function, and it will call it if it exists (assuming that it is from the virtualenv activate.ps1' script).
+#>
 
     [CmdletBinding()]
 
@@ -35,82 +35,113 @@ function Disable-Python {
 }
 
 function Enable-Python {
-    <#
-    .SYNOPSIS
-    Adds an installed version of Python to the current shell environment.
+<#
+.SYNOPSIS
+Adds an installed version of Python to the current shell environment.
 
-    .DESCRIPTION
-    The Enable-Python function adds the install path and scripts path for the specified Python version to the PATH environment variable for this shell session.
+.DESCRIPTION
+The Enable-Python function adds the install path and scripts path for the specified Python version to the PATH 
+environment variable for this shell session.  If multiple Python distributions are found, they are sorted in the
+following order:
+    - Scope (current user installs sorted first)
+    - Company (alphabetical)
+    - Version
+    - Platform (descending)
+    - Tag
+The core Python distribution ("PythonCore") is treated as a special case and always sorted first.  If multiple
+versions are found, the top-sorted version is enabled.
 
-    .EXAMPLE
-    Enable-Python -Version 2.7 -Platform 32
-    Enable Python v2.7 (x86-32).
+.PARAMETER Company
+The name of a company to filter Python distributions on.
 
-    .EXAMPLE
-    Enable-Python 3.4 64
-    Enable Python v3.4 (x86-64) using short-hand syntax.
+.PARAMETER Tag
+The tag value to filter Python distributions on.
 
-    .EXAMPLE
-    Enable-Python 3.4
-    Enable Python v3.4 using the highest available platform.
-    #>
+.PARAMETER Version
+The version number to filter Python distributions on.
+
+.PARAMETER Platform
+The underlying CPU architecture (either "32"-bit or "64"-bit) to filter Python distributions on.
+
+.PARAMETER Scope
+The operating system install scope (either "CurrentUser" or "AllUsers") to filter Python distributions on.
+
+.EXAMPLE
+Enable-Python
+Gets all Python installs available, sorts them, and enables the top-most install (CurrentUser scope installs before 
+AllUser, PythonCore above others then alphabetical company name, highest version number, 64-bit before 32-bit).
+
+.EXAMPLE
+Enable-Python -Company ContinuumAnalytics
+Gets all Python installs from Continuum Analytics, Inc., sorts them, and enables the top-most install (CurrentUser 
+scope installs before AllUser, highest version number, 64-bit before 32-bit).
+
+.EXAMPLE
+Enable-Python -Version 2.7 -Platform 32
+Filters for 32-bit Python distributions with a version of 2.7.*, sorts them, and enables the top-most install 
+(CurrentUser scope installs before AllUser, PythonCore above others then alphabetical company name, highest version 
+number, 64-bit before 32-bit).
+
+.EXAMPLE
+Enable-Python 3.4 64
+The Version and Platform parameters are positional, and can be specified without their respective names. Filters for 
+64-bit Python distributions with a version of 3.4.*, sorts them, and enables the top-most install (CurrentUser scope 
+installs before AllUser, PythonCore above others then alphabetical company name, highest version number, 64-bit before 
+32-bit).
+
+.LINK
+https://github.com/DavidWhittingham/ps-EnablePython
+
+#>
 
     [CmdletBinding()]
 
     param (
         [Parameter()]
-        [ValidateScript({
-            (Get-Python | ForEach-Object -process { $_.Version } | Sort-Object -Unique).Contains($_)
-        })]
-        # The version number of Python (in '<major>.<minor>' format) to enable.
-        [string]$Version,
+        [string]$Company,
 
         [Parameter()]
-        [ValidateSet(32,64)]
-        # The Python platform version to enable (either 32 or 64).
-        [int]$Platform
+        [string]$Tag,
+
+        [Parameter(Position = 1)]
+        [string]$Version,
+
+        [Parameter(Position = 2)]
+        [ValidateSet(32, 64)]
+        [Nullable[int]]$Platform,
+
+        [Parameter()]
+        [ValidateSet("CurrentUser", "AllUsers")]
+        [string]$Scope
     )
 
     process {
-        $installedPythons = Get-Python
-
-        # From the Python versions installed, get the first version that matches the version number specified (and
-        # optionally the platform).
-        $foundVersion = $null
-        foreach ($install in $installedPythons) {
-            if ([string]::IsNullOrEmpty($Version) -or $install.Version -eq $Version) {
-                if ($Platform) {
-                    if ($Platform -eq $install.Platform) {
-                        $foundVersion = $install
-                        break
-                    }
-                }
-                else
-                {
-                    $foundVersion = $install
-                    break
-                }
-            }
+        $getPythonArgs = @{
+            "Company" = $Company;
+            "Tag" = $Tag;
+            "Version" = $Version;
+        }
+        if ($null -ne $Platform) {
+            $getPythonArgs.Platform = $Platform
+        }
+        if  (![string]::IsNullOrWhiteSpace($Scope)) {
+            $getPythonArgs.Scope = $Scope
         }
 
-        if (!$foundVersion) {
-            $pythonVersion = if ($Version) {
-                    "Python $Version"
-                } else {
-                    "Python"
-                }
+        [array]$pythons = Get-Python @getPythonArgs
 
-            $errMessage = if ($Platform) {
-                    "$pythonVersion (x86-$Platform) could not be found."
-                } else {
-                    "$pythonVersion could not be found."
-                }
+        if (!$pythons) {
+            throw "No Python distribution could be found matching those search criteria."
+        }
 
-            throw $errMessage
+        if ($pythons.Length -gt 1) {
+            Write-Host "Multiple Python distributions found matching that criteria, enabling the top choice..."
         }
 
         # disable any existing Python version before enabling a new one
         Disable-Python
+
+        $foundVersion = $pythons[0]
 
         # Save the existing path variable, then set the new path variable with the additional directories pre-pended.
         # Putting them at the start ensures the specified Python version will be the first one found (in case a Python
@@ -118,14 +149,84 @@ function Enable-Python {
         $script:OLD_ENV_PATH = $Env:PATH
         $Env:PATH = "$($foundVersion.InstallPath);$($foundVersion.ScriptsPath);$script:OLD_ENV_PATH"
 
-        Write-Host "Python $($foundVersion.Version) (x86-$($foundVersion.Platform)) has been enabled."
+        Write-Host """$($foundVersion.Name)"" has been enabled."
     }
 }
 
 function Get-Python {
+<#
+.SYNOPSIS
+Gets the installed versions of Python on the current machine.
+
+.DESCRIPTION
+The Get-Python function finds Python installs on the current machine, collects their details and returns them as a 
+sorted list. Installs are sorted in the following order:
+    - Scope (current user installs sorted first)
+    - Company (alphabetical)
+    - Version
+    - Platform (descending)
+    - Tag
+The core Python distribution ("PythonCore") is treated as a special case and always sorted first.
+
+.PARAMETER Company
+The name of a company to filter Python distributions on.
+
+.PARAMETER Tag
+The tag value to filter Python distributions on.
+
+.PARAMETER Version
+The version number to filter Python distributions on.
+
+.PARAMETER Platform
+The underlying CPU architecture (either "32"-bit or "64"-bit) to filter Python distributions on.
+
+.PARAMETER Scope
+The operating system install scope (either "CurrentUser" or "AllUsers") to filter Python distributions on.
+
+.EXAMPLE
+Get-Python
+Gets all Python installs available and sorts them.
+
+.EXAMPLE
+Get-Python -Company ContinuumAnalytics
+Gets all Python installs from Continuum Analytics, Inc. and sorts them.
+
+.EXAMPLE
+Get-Python -Version 2.7 -Platform 32
+Gets all 32-bit Python installs with a version of 2.7.* and sorts them.
+
+.EXAMPLE
+Get-Python 3.4 64
+Gets all 364-bit Python installs with a version of 3.4.* and sorts them. The Version and Platform parameters are 
+positional, and can be specified without their respective names.
+
+.LINK
+https://github.com/DavidWhittingham/ps-EnablePython
+
+#>
+
     [CmdletBinding()]
     [OutputType([PSObject])]
-    param ()
+
+    param (
+        [Parameter()]
+        [string]$Company,
+
+        [Parameter()]
+        [string]$Tag,
+
+        [Parameter(Position = 1)]
+        [string]$Version,
+
+        [Parameter(Position = 2)]
+        [ValidateSet(32, 64)]
+        [Nullable[int]]$Platform,
+
+        [Parameter()]
+        [ValidateSet("CurrentUser", "AllUsers")]
+        [string]$Scope
+    )
+
     <#
     .SYNOPSIS
     Lists the Python versions installed on this computer.
@@ -133,64 +234,169 @@ function Get-Python {
     #>
 
     process {
-        $versions = New-Object System.Collections.Generic.List[PSObject]
+        $pythons = New-Object System.Collections.Generic.List[PSObject]
 
-        [Microsoft.Win32.RegistryKey[]]$regKeys = Get-ChildItem -Path Registry::HKLM\Software\Python\PythonCore\ -ErrorAction "SilentlyContinue"
-        [Microsoft.Win32.RegistryKey[]]$regKeys = $regKeys + (Get-ChildItem -Path Registry::HKLM\SOFTWARE\Wow6432Node\Python\PythonCore\ -ErrorAction "SilentlyContinue")
+        $regKeyLocations = (
+            @{
+                path = "HKCU\Software\Python\"
+                scope = "CurrentUser"
+            },
+            @{
+                path = "HKLM\Software\Python\"
+                scope = "AllUsers"
+            }
+        )
 
-        foreach ($key in $regKeys) {
-            if (Test-Path ("Registry::" + (Join-Path $key.Name "\InstallPath"))) {
-                $versions.Add((createCPythonVersion $key))
+        if (is64Bit) {
+            $regKeyLocations += @{
+                path = "HKLM\SOFTWARE\Wow6432Node\Python\"
+                scope = "AllUsers"
             }
         }
 
-        ($versions |
-            Sort-Object -Property (
-                @{Expression="Implementation"; Descending=$false},
-                @{Expression="Version"; Descending=$true},
-                @{Expression="Platform"; Descending=$true}
-            )
+        foreach ($location in $regKeyLocations) {
+            $companyKeys = Get-ChildItem -Path "Registry::$($location.path)" -ErrorAction "SilentlyContinue"
+
+            foreach ($companyKey in $companyKeys) {
+
+                if ($companyKey.PSChildName -eq "PyLauncher") {
+                    # PyLauncher should be ignored
+                    continue
+                }
+
+                $tagKeys = Get-ChildItem -Path $companyKey.PSPath -ErrorAction "SilentlyContinue"
+
+                foreach($tagKey in $tagKeys) {
+                    if (Test-Path (Join-Path $tagKey.PSPath "\InstallPath")) {
+                        # tests if a valid install actually exists, uninstalled version can leave the Company/Tag structure
+                        $pythons.Add((createPythonVersion $tagKey $location.scope))
+                    }
+                }
+            }
+        }
+
+        # sort python core first
+        $sortProperties = (
+            @{
+                Expression =" Scope";
+                Descending = $true
+            },
+            @{
+                Expression = "Company";
+                Descending = $false
+            },
+            @{
+                Expression = "Version";
+                Descending = $true},
+            @{
+                Expression = "Platform";
+                Descending = $true
+            },
+            @{
+                Expression = "Tag";
+                Descending = $false
+            }
+        )
+
+        if (![string]::IsNullOrWhiteSpace($Scope)) {
+            $pythons = ($pythons | Where-Object {"$($_.Scope)" -like "$Scope" })
+        }
+
+        if (![string]::IsNullOrWhiteSpace($Company)) {
+            $pythons = ($pythons | Where-Object {"$($_.Company)" -like "$Company" + "*" })
+        }
+
+        if (![string]::IsNullOrWhiteSpace($Tag)) {
+            $pythons = ($pythons | Where-Object {"$($_.Tag)" -like "$Tag" + "*" })
+        }
+
+        if (![string]::IsNullOrWhiteSpace($Version)) {
+            $pythons = ($pythons | Where-Object {"$($_.Version)" -like "$Version*" })
+        }
+
+        if ($null -ne $Platform) {
+            $pythons = ($pythons | Where-Object {"$($_.Platform)" -like "$Platform" })
+        }
+
+        @(
+            @($pythons | Where-Object {$_.Company -eq "PythonCore"} | Sort-Object -Property $sortProperties) +
+            @($pythons | Where-Object {$_.Company -ne "PythonCore"} | Sort-Object -Property $sortProperties)
         )
     }
 }
 
-function createCPythonVersion(
-    [Microsoft.Win32.RegistryKey]$registryKey
-) {
-    # Create a new PythonVersion object from a CPython install registry key
-    $newVersion = newPythonVersion
-    $newVersion.Implementation = "CPython"
-    $newVersion.InstallPath = (Get-ItemProperty -Path ("Registry::" + (Join-Path $key.Name "\InstallPath"))).'(Default)'
-    $newVersion.Version = ($key.PSChildName)
-    $newVersion.Platform = if ((is64Bit) -and !($registryKey -match "Wow6432Node")) {"64"} else {"32"}
-    $newVersion
-}
-
-function is64Bit {
-    # Check if this machine is 64-bit
-    ((Get-WmiObject Win32_OperatingSystem).OSArchitecture -match '64-bit')
-}
-
-function newPythonVersion {
-    # Create a new PSObject for storing Python version information
-    $obj = New-Object -TypeName PSObject
-    Add-Member -InputObject $obj -NotePropertyName InstallPath -NotePropertyValue $null
-    Add-Member -InputObject $obj -NotePropertyName Implementation -NotePropertyValue $null
-    Add-Member -InputObject $obj -NotePropertyName Platform -NotePropertyValue $null
-    Add-Member -InputObject $obj -NotePropertyName Version -NotePropertyValue $null
-    Add-Member -InputObject $obj -MemberType ScriptProperty -Name Name -Value {
-        return ("{0} {1}, x86-{2}" -f $this.Implementation, $this.Version, $this.Platform)
+function createPythonVersion([Microsoft.Win32.RegistryKey]$tagKey, [string]$scope) {
+    $parentKey = Get-Item $tagKey.PSParentPath
+    $installPathKey = Get-Item (Join-Path $tagKey.PSPath "InstallPath")
+    $pythonExecutable = getPythonCommand $installPathKey
+    $version = getPythonVersion($pythonExecutable)
+    $company = $parentKey.PSChildName
+    $companyDisplayName = if ((Get-ItemProperty -Path $parentKey.PSPath) -match "DisplayName") {
+            (Get-ItemProperty -Path $parentKey.PSPath)."DisplayName"
+        } else {
+            $null
+        }
+    $tagDisplayName = if ((Get-ItemProperty -Path $tagKey.PSPath) -match "DisplayName") {
+        (Get-ItemProperty -Path $tagKey.PSPath)."DisplayName"
+    } else {
+        $null
     }
-    Add-Member -InputObject $obj -MemberType ScriptProperty -Name ScriptsPath -Value {
+
+    # Create a new PSObject for storing Python version information
+    $obj = New-Object -TypeName PSObject -Prop (@{
+        "Company"=$company;
+        "CompanyDisplayName"=$companyDisplayName;
+        "Tag"=$tagKey.PSChildName;
+        "TagDisplayName"=$tagDisplayName;
+        "InstallPath"=(Get-ItemProperty -Path $installPathKey.PSPath)."(Default)";
+        "Platform"=if ((is64Bit) -and !($tagKey -match "Wow6432Node")) {"64"} else {"32"};
+        "Executable"=$pythonExecutable;
+        "Version"=$version;
+        "Scope"=$scope;
+    })
+
+    Add-Member -InputObject $obj -MemberType ScriptProperty -Name "Name" -Value {
+        $company = if ($null -eq $this.CompanyDisplayName) { $this.Company } else { $this.CompanyDisplayName }
+        $tag = if ($null -eq $this.TagDisplayName) { $this.Tag } else { $this.TagDisplayName }
+        return ("{0} {1} (x86-{2})" -f $company, $tag, $this.Platform)
+    }
+    Add-Member -InputObject $obj -MemberType ScriptProperty -Name "ScriptsPath" -Value {
         return (Join-Path $this.InstallPath "Scripts")
     }
 
-    $defaultProperties = @("Name", "Version", "Platform")
+    $defaultProperties = @("Name", "Company", "Tag", "Version", "Platform", "Scope")
     $defaultDisplayPropertySet = New-Object System.Management.Automation.PSPropertySet("DefaultDisplayPropertySet", [string[]]$defaultProperties)
     $PSStandardMembers = [System.Management.Automation.PSMemberInfo[]]@($defaultDisplayPropertySet)
     $obj | Add-Member MemberSet PSStandardMembers $PSStandardMembers
 
     $obj
+}
+
+function getPythonCommand([Microsoft.Win32.RegistryKey]$installPathKey) {
+    # test for "ExecutablePath" folder
+    if ((Get-ItemProperty -Path $installPathKey.PSPath) -match "ExecutablePath") {
+        Get-Command (Get-ItemProperty -Path $installPathKey.PSPath)."ExecutablePath"
+    } else {
+        $pythonPath = Join-Path (Get-ItemProperty -Path $installPathKey.PSPath)."(Default)" "python.exe"
+        if (Test-Path $pythonPath) {
+            Get-Command $pythonPath
+        } else {
+            $null
+        }
+    }
+}
+
+function getPythonVersion([System.Management.Automation.ApplicationInfo]$executablePath) {
+    if ($executablePath -eq $null) {
+        $null
+    } else {
+        & $executablePath -c 'from sys import version_info; print(""{0}.{1}.{2}"".format(version_info[0], version_info[1], version_info[2]))'
+    }
+}
+
+function is64Bit {
+    # Check if this machine is 64-bit
+    ((Get-WmiObject Win32_OperatingSystem).OSArchitecture -match '64-bit')
 }
 
 Export-ModuleMember "*-*"
