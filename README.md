@@ -134,5 +134,6 @@ Get all Python installs with a particular version/platform, sort them, and enabl
     "PythonCore 2.7 (x86-32)" has been enabled.
 
 The **Version** and **Platform** parameters are positional, and can be specified without their respective names:
+
     PS> Enable-Python 2.7 64
     "PythonCore 2.7 (x86-64)" has been enabled.
