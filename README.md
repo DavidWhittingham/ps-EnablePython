@@ -103,6 +103,7 @@ Gets all Python installs with a particular version/platform and sort them:
     Scope    : AllUsers
 
 The **Version** and **Platform** parameters are positional, and can be specified without their respective names:
+
     PS> Get-Python 2.7 64
 
 
