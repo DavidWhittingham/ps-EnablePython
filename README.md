@@ -5,7 +5,7 @@ scripts directories to your *PATH* environment variable) installed versions of P
 
 Installation
 ------------
-**EnablePython* is [availble on the PowerShell Gallery](https://www.powershellgallery.com/packages/EnablePython/), and
+**EnablePython** is [availble on the PowerShell Gallery](https://www.powershellgallery.com/packages/EnablePython/), and
 can be installed at the PowerShell prompt:
 
     PS> Install-Module -Name EnablePython
