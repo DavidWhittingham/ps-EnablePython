@@ -66,16 +66,16 @@ PowerShellVersion = '3.0'
 # NestedModules = @()
 
 # Functions to export from this module
-FunctionsToExport = '*'
+FunctionsToExport = @("Get-Python","Enable-Python","Disable-Python")
 
 # Cmdlets to export from this module
-CmdletsToExport = ''
+CmdletsToExport = @()
 
 # Variables to export from this module
-VariablesToExport = ''
+VariablesToExport = @()
 
 # Aliases to export from this module
-AliasesToExport = '*'
+AliasesToExport = @()
 
 # List of all modules packaged with this module
 # ModuleList = @()
