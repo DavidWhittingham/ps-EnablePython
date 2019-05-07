@@ -396,7 +396,7 @@ function getPythonVersion([System.Management.Automation.ApplicationInfo]$executa
 
 function is64Bit {
     # Check if this machine is 64-bit
-    ((Get-WmiObject Win32_OperatingSystem).OSArchitecture -match '64-bit')
+    ((Get-CimInstance Win32_OperatingSystem).OSArchitecture -match '64-bit')
 }
 
 Export-ModuleMember "*-*"
