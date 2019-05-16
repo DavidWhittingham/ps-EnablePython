@@ -396,7 +396,7 @@ function getPythonVersion([System.Management.Automation.ApplicationInfo]$executa
         $null
     }
     else {
-        & $executablePath -c 'from sys import version_info; print(""{0}.{1}.{2}"".format(version_info[0], version_info[1], version_info[2]))'
+        & $executablePath -E -c 'from sys import version_info; print(""{0}.{1}.{2}"".format(version_info[0], version_info[1], version_info[2]))'
     }
 }
 
