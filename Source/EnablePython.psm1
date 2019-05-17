@@ -1,6 +1,8 @@
 Set-StrictMode -Version 2.0
 
 $OLD_ENV_PATH = $null
+$OLD_ENV_PYTHONHOME = $null
+$RESTORE_ENV_VARS = $false
 
 function Disable-Python {
     <#
@@ -27,9 +29,14 @@ It will also check for the existance of a 'deactivate' function, and it will cal
             deactivate
         }
 
-        if ($script:OLD_ENV_PATH) {
+        if ($script:RESTORE_ENV_VARS) {
             # restore the original path
             $Env:PATH = $script:OLD_ENV_PATH
+
+            # restore the original PYTHONHOME
+            $Env:PYTHONHOME = $script:OLD_ENV_PYTHONHOME
+
+            $script:RESTORE_ENV_VARS = $false
         }
     }
 }
@@ -65,6 +72,9 @@ The underlying CPU architecture (either "32"-bit or "64"-bit) to filter Python d
 
 .PARAMETER Scope
 The operating system install scope (either "CurrentUser" or "AllUsers") to filter Python distributions on.
+
+.PARAMETER PythonHome
+Sets a custom path on the PYTHONHOME environment variable.
 
 .EXAMPLE
 Enable-Python
@@ -112,7 +122,22 @@ https://github.com/DavidWhittingham/ps-EnablePython
 
         [Parameter()]
         [ValidateSet("CurrentUser", "AllUsers")]
-        [string]$Scope
+        [string]$Scope,
+
+        [Parameter()]
+        [Alias("Home")]
+        # Implemented validation, but leaving it disabled for now, not sure if there are any situations where 
+        # Test-Path might fail on a valid path
+        # [ValidateScript({
+        #     if ($_ -eq $null) {
+        #         $true
+        #     } elseif (Test-Path $_ -PathType Container) {
+        #         $true
+        #     } else {
+        #         Throw [System.Management.Automation.ValidationMetadataException] "The path '${_}' is not a valid directory."
+        #     }
+        # })]
+        [string]$PythonHome
     )
 
     process {
@@ -143,11 +168,19 @@ https://github.com/DavidWhittingham/ps-EnablePython
 
         $foundVersion = $pythons[0]
 
+        # Let EnablePython know it needs to restore the original environment variables on disabling Python
+        $script:RESTORE_ENV_VARS = $true
+
         # Save the existing path variable, then set the new path variable with the additional directories pre-pended.
         # Putting them at the start ensures the specified Python version will be the first one found (in case a Python
         # installation is already in the PATh variable).
         $script:OLD_ENV_PATH = $Env:PATH
         $Env:PATH = "$($foundVersion.InstallPath);$($foundVersion.ScriptsPath);$script:OLD_ENV_PATH"
+
+        # Save the existing PYTHONHOME variable, then ensure it is cleared so that the activated Python doesn't go off
+        # looking at an incorrect home
+        $script:OLD_ENV_PYTHONHOME = $Env:PYTHONHOME
+        $Env:PYTHONHOME = $PythonHome
 
         Write-Information """$($foundVersion.Name)"" has been enabled." -InformationAction Continue
     }
