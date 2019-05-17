@@ -135,7 +135,7 @@ https://github.com/DavidWhittingham/ps-EnablePython
         }
 
         if ($pythons.Length -gt 1) {
-            Write-Information "Multiple Python distributions found matching that criteria, enabling the top choice..."
+            Write-Information "Multiple Python distributions found matching that criteria, enabling the top choice..." -InformationAction Continue
         }
 
         # disable any existing Python version before enabling a new one
@@ -149,7 +149,7 @@ https://github.com/DavidWhittingham/ps-EnablePython
         $script:OLD_ENV_PATH = $Env:PATH
         $Env:PATH = "$($foundVersion.InstallPath);$($foundVersion.ScriptsPath);$script:OLD_ENV_PATH"
 
-        Write-Information """$($foundVersion.Name)"" has been enabled."
+        Write-Information """$($foundVersion.Name)"" has been enabled." -InformationAction Continue
     }
 }
 
