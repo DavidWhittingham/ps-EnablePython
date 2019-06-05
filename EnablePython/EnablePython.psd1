@@ -12,7 +12,7 @@
 RootModule = 'EnablePython.psm1'
 
 # Version number of this module.
-ModuleVersion = '2.1.0'
+ModuleVersion = '2.2.0'
 
 # ID used to uniquely identify this module
 GUID = '20232e29-56bc-4024-823b-afe3994c9365'
