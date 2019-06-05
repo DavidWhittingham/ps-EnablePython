@@ -2,6 +2,7 @@ Set-StrictMode -Version 2.0
 
 $OLD_ENV_PATH = $null
 $OLD_ENV_PYTHONHOME = $null
+$OLD_ENV_PYTHONUSERBASE = $null
 $RESTORE_ENV_VARS = $false
 
 function Disable-Python {
@@ -10,9 +11,11 @@ function Disable-Python {
 Disables any Python version enabled by the Enable-Python function.
 
 .DESCRIPTION
-The Disable-Python function restores the original PATH environment variable, removing any changes made by running the Enable-Python function.
+The Disable-Python function restores the original PATH environment variable, removing any changes made by running the
+Enable-Python function.
 
-It will also check for the existance of a 'deactivate' function, and it will call it if it exists (assuming that it is from the virtualenv activate.ps1' script).
+It will also check for the existance of a 'deactivate' function, and it will call it if it exists (assuming that it is
+from the virtualenv activate.ps1' script).
 #>
 
     [CmdletBinding()]
@@ -35,6 +38,9 @@ It will also check for the existance of a 'deactivate' function, and it will cal
 
             # restore the original PYTHONHOME
             $Env:PYTHONHOME = $script:OLD_ENV_PYTHONHOME
+
+            # restore the original PYTHONUSERBASE
+            $Env:PYTHONUSERBASE = $script:OLD_ENV_PYTHONUSERBASE
 
             $script:RESTORE_ENV_VARS = $false
         }
@@ -126,7 +132,7 @@ https://github.com/DavidWhittingham/ps-EnablePython
 
         [Parameter()]
         [Alias("Home")]
-        # Implemented validation, but leaving it disabled for now, not sure if there are any situations where 
+        # Implemented validation, but leaving it disabled for now, not sure if there are any situations where
         # Test-Path might fail on a valid path
         # [ValidateScript({
         #     if ($_ -eq $null) {
@@ -137,7 +143,11 @@ https://github.com/DavidWhittingham/ps-EnablePython
         #         Throw [System.Management.Automation.ValidationMetadataException] "The path '${_}' is not a valid directory."
         #     }
         # })]
-        [string]$PythonHome
+        [string]$PythonHome,
+
+        [Parameter()]
+        [ValidateSet($true, $false)]
+        [string]$PlatformSpecificUserBase = $true
     )
 
     process {
@@ -181,6 +191,17 @@ https://github.com/DavidWhittingham/ps-EnablePython
         # looking at an incorrect home
         $script:OLD_ENV_PYTHONHOME = $Env:PYTHONHOME
         $Env:PYTHONHOME = $PythonHome
+
+        # If configured to separate user base by platform, set a custom user base
+        if ($PlatformSpecificUserBase -eq $true) {
+            $script:OLD_ENV_PYTHONUSERBASE = $Env:PYTHONUSERBASE
+            $Env:PYTHONUSERBASE = Join-Path -Path (Join-Path -Path $Env:APPDATA -ChildPath "EnablePython") `
+                -ChildPath ("x86-{0}" -f $foundVersion.Platform)
+        }
+
+        # Get the user scripts path, add it to path as well
+        $userScriptsPath = & $foundVersion.Executable -E -c 'import sysconfig; print(sysconfig.get_path(""scripts"", scheme=""nt_user""))'
+        $Env:PATH = "$userScriptsPath;$Env:Path"
 
         Write-Information """$($foundVersion.Name)"" has been enabled." -InformationAction Continue
     }
