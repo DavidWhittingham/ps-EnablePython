@@ -86,9 +86,9 @@ The operating system install scope (either "CurrentUser" or "AllUsers") to filte
 .PARAMETER PythonHome
 Sets a custom path on the PYTHONHOME environment variable.
 
-.PARAMETER PlatformSpecificUserBase
-Instructs EnablePython on to set or not set a custom PYTHONUSERBASE path in a platform-specific manner.  By default,
-Python uses the same location for both 32-bit and 64-bit installations, which causes problems for binary components.
+.PARAMETER NoPlatformUserBase
+Instructs EnablePython not to set a custom PYTHONUSERBASE path in a platform-specific manner.  By default, Python uses
+the same location for both 32-bit and 64-bit installations, which causes problems for binary components.
 
 .EXAMPLE
 Enable-Python
@@ -154,8 +154,7 @@ https://github.com/DavidWhittingham/ps-EnablePython
         [string]$PythonHome,
 
         [Parameter()]
-        [ValidateSet($true, $false)]
-        [string]$PlatformSpecificUserBase = $true
+        [switch]$NoPlatformUserBase
     )
 
     process {
@@ -201,7 +200,7 @@ https://github.com/DavidWhittingham/ps-EnablePython
         $Env:PYTHONHOME = $PythonHome
 
         # If configured to separate user base by platform, set a custom user base
-        if ($PlatformSpecificUserBase -eq $true) {
+        if ($NoPlatformUserBase -eq $false) {
             $script:OLD_ENV_PYTHONUSERBASE = $Env:PYTHONUSERBASE
             $Env:PYTHONUSERBASE = Join-Path -Path (Join-Path -Path $Env:APPDATA -ChildPath "EnablePython") `
                 -ChildPath ("x86-{0}" -f $foundVersion.Platform)

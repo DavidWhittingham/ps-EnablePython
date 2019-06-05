@@ -118,7 +118,7 @@ To enable a Python installation on your current shell instance, use the `Enable-
 There are additional options that can control how an environment gets activated:
 
 - `PythonHome`: set a custom Python Home path on activating the environment, which will be automatically removed on deactivation
-- `PlatformSpecificUserBase`: Set to `$true` by default, this parameter *fixes* an issue with running multiple Pythons at the same version with different platforms (e.g. Python 2.7 x86-32 *and* x86-64).  Python by default uses the same directory on both platforms for user installed site-package, which is a problem for any packages that are platform specific.  By default, EnablePython sets an environment variable to have custom per-platform paths in the form `<RoamingAppData>\EnablePython\<PythonPlatform>`.  Setting this to `$false` disables this functionality.
+- `NoPlatformUserBase`: EnablePython *fixes* an issue with running multiple Pythons at the same version with different platforms (e.g. Python 2.7 x86-32 *and* x86-64).  Python by default uses the same directory on both platforms for user installed site-package, which is a problem for any packages that are platform specific.  By default, EnablePython sets an environment variable to have custom per-platform paths in the form `<RoamingAppData>\EnablePython\<PythonPlatform>`.  Setting this switch disables this functionality.
 
 #### Examples
 Get all Python installs available, sort them, and enable the top-most install:
