@@ -1,7 +1,6 @@
 EnablePython
 ============
-**EnablePython** is a PowerShell module with functions for listing and enabling (i.e. adding the installation and
-scripts directories to your *PATH* environment variable) installed versions of Python.
+**EnablePython** is a PowerShell module with functions for listing and enabling (i.e. adding the installation and scripts directories to your *PATH* environment variable) installed versions of Python (that register themselves on Windows in acordance with [PEP 514](https://www.python.org/dev/peps/pep-0514/)).
 
 Installation
 ------------
@@ -14,8 +13,7 @@ Using the Module
 ----------------
 
 ### Getting Python Installs
-Once the module is installed and has been imported, you can list all of the installed Python versions by issuing the
-`Get-Python` command. This will display all of the installed Python versions:
+Once the module is installed and has been imported, you can list all of the installed Python versions by issuing the `Get-Python` command. This will display all of the installed Python versions:
 ```
 Name     : PythonCore 2.7 (x86-64)
 Company  : PythonCore
@@ -116,6 +114,11 @@ The **Version** and **Platform** parameters are positional, and can be specified
 
 ### Enabling Python Installs
 To enable a Python installation on your current shell instance, use the `Enable-Python` function.  This function supports the same filtering and does the same sorting as the `Get-Python` function.  The top-most sorted Python install will be enabled, as long as one or more installs are found (given supplied parameters).
+
+There are additional options that can control how an environment gets activated:
+
+- `PythonHome`: set a custom Python Home path on activating the environment, which will be automatically removed on deactivation
+- `PlatformSpecificUserBase`: Set to `$true` by default, this parameter *fixes* an issue with running multiple Pythons at the same version with different platforms (e.g. Python 2.7 x86-32 *and* x86-64).  Python by default uses the same directory on both platforms for user installed site-package, which is a problem for any packages that are platform specific.  By default, EnablePython sets an environment variable to have custom per-platform paths in the form `<RoamingAppData>\EnablePython\<PythonPlatform>`.  Setting this to `$false` disables this functionality.
 
 #### Examples
 Get all Python installs available, sort them, and enable the top-most install:
