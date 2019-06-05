@@ -82,6 +82,10 @@ The operating system install scope (either "CurrentUser" or "AllUsers") to filte
 .PARAMETER PythonHome
 Sets a custom path on the PYTHONHOME environment variable.
 
+.PARAMETER PlatformSpecificUserBase
+Instructs EnablePython on to set or not set a custom PYTHONUSERBASE path in a platform-specific manner.  By default,
+Python uses the same location for both 32-bit and 64-bit installations, which causes problems for binary components.
+
 .EXAMPLE
 Enable-Python
 Gets all Python installs available, sorts them, and enables the top-most install (CurrentUser scope installs before
