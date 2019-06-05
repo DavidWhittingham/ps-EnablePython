@@ -4,6 +4,7 @@ $OLD_ENV_PATH = $null
 $OLD_ENV_PYTHONHOME = $null
 $OLD_ENV_PYTHONUSERBASE = $null
 $RESTORE_ENV_VARS = $false
+$RESTORE_USER_BASE = $false
 
 function Disable-Python {
     <#
@@ -32,15 +33,18 @@ from the virtualenv activate.ps1' script).
             deactivate
         }
 
-        if ($script:RESTORE_ENV_VARS) {
+        if ($script:RESTORE_ENV_VARS -eq $true) {
             # restore the original path
             $Env:PATH = $script:OLD_ENV_PATH
 
             # restore the original PYTHONHOME
             $Env:PYTHONHOME = $script:OLD_ENV_PYTHONHOME
 
-            # restore the original PYTHONUSERBASE
-            $Env:PYTHONUSERBASE = $script:OLD_ENV_PYTHONUSERBASE
+            if ($script:RESTORE_USER_BASE -eq $true) {
+                # restore the original PYTHONUSERBASE
+                $Env:PYTHONUSERBASE = $script:OLD_ENV_PYTHONUSERBASE
+                $script:RESTORE_USER_BASE = $false
+            }
 
             $script:RESTORE_ENV_VARS = $false
         }
@@ -201,9 +205,10 @@ https://github.com/DavidWhittingham/ps-EnablePython
             $script:OLD_ENV_PYTHONUSERBASE = $Env:PYTHONUSERBASE
             $Env:PYTHONUSERBASE = Join-Path -Path (Join-Path -Path $Env:APPDATA -ChildPath "EnablePython") `
                 -ChildPath ("x86-{0}" -f $foundVersion.Platform)
+            $script:RESTORE_USER_BASE = $true
         }
 
-        # Get the user scripts path, add it to path as well
+        # Get the user scripts path, add it to PATH as well
         $userScriptsPath = & $foundVersion.Executable -E -c 'import sysconfig; print(sysconfig.get_path(""scripts"", scheme=""nt_user""))'
         $Env:PATH = "$userScriptsPath;$Env:Path"
 
