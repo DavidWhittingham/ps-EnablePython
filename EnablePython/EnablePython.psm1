@@ -296,48 +296,14 @@ https://github.com/DavidWhittingham/ps-EnablePython
     #>
 
     process {
-        $pythons = New-Object System.Collections.Generic.List[PSObject]
+        $pythons = getPep514Pythons
+        $arcGisProPython = getArcGisProPython
 
-        $regKeyLocations = (
-            @{
-                path  = "HKCU\Software\Python\"
-                scope = "CurrentUser"
-            },
-            @{
-                path  = "HKLM\Software\Python\"
-                scope = "AllUsers"
-            }
-        )
-
-        if (is64Bit) {
-            $regKeyLocations += @{
-                path  = "HKLM\SOFTWARE\Wow6432Node\Python\"
-                scope = "AllUsers"
-            }
+        if ($null -ne $arcGisProPython) {
+            $pythons = $pythons + @($arcGisProPython)
         }
 
-        foreach ($location in $regKeyLocations) {
-            $companyKeys = Get-ChildItem -Path "Registry::$($location.path)" -ErrorAction "SilentlyContinue"
-
-            foreach ($companyKey in $companyKeys) {
-
-                if ($companyKey.PSChildName -eq "PyLauncher") {
-                    # PyLauncher should be ignored
-                    continue
-                }
-
-                $tagKeys = Get-ChildItem -Path $companyKey.PSPath -ErrorAction "SilentlyContinue"
-
-                foreach ($tagKey in $tagKeys) {
-                    if (Test-Path (Join-Path $tagKey.PSPath "\InstallPath")) {
-                        # tests if a valid install actually exists, uninstalled version can leave the Company/Tag structure
-                        $pythons.Add((createPythonVersion $tagKey $location.scope))
-                    }
-                }
-            }
-        }
-
-        # sort python core first
+        # Sort the list of Python versions
         $sortProperties = (
             @{
                 Expression = " Scope";
@@ -361,6 +327,7 @@ https://github.com/DavidWhittingham/ps-EnablePython
             }
         )
 
+        # Apply filters
         if (![string]::IsNullOrWhiteSpace($Scope)) {
             $pythons = ($pythons | Where-Object { "$($_.Scope)" -like "$Scope" })
         }
@@ -381,6 +348,7 @@ https://github.com/DavidWhittingham/ps-EnablePython
             $pythons = ($pythons | Where-Object { "$($_.Platform)" -like "$Platform" })
         }
 
+        # Sort PythonCore first
         @(
             @($pythons | Where-Object { $_.Company -eq "PythonCore" } | Sort-Object -Property $sortProperties) +
             @($pythons | Where-Object { $_.Company -ne "PythonCore" } | Sort-Object -Property $sortProperties)
@@ -388,7 +356,7 @@ https://github.com/DavidWhittingham/ps-EnablePython
     }
 }
 
-function createPythonVersion([Microsoft.Win32.RegistryKey]$tagKey, [string]$scope) {
+function createPep514PythonVersion([Microsoft.Win32.RegistryKey]$tagKey, [string]$scope) {
     $parentKey = Get-Item $tagKey.PSParentPath
     $installPathKey = Get-Item (Join-Path $tagKey.PSPath "InstallPath")
     $pythonExecutable = getPythonCommand $installPathKey
@@ -429,12 +397,105 @@ function createPythonVersion([Microsoft.Win32.RegistryKey]$tagKey, [string]$scop
         return (Join-Path $this.InstallPath "Scripts")
     }
 
-    $defaultProperties = @("Name", "Company", "Tag", "Version", "Platform", "Scope")
-    $defaultDisplayPropertySet = New-Object System.Management.Automation.PSPropertySet("DefaultDisplayPropertySet", [string[]]$defaultProperties)
-    $PSStandardMembers = [System.Management.Automation.PSMemberInfo[]]@($defaultDisplayPropertySet)
-    $obj | Add-Member MemberSet PSStandardMembers $PSStandardMembers
+    $obj = setPythonVersionStandardMembers $obj
 
     $obj
+}
+
+function getArcGisProPython() {
+    $arcgisProRegKey = "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\ESRI\ArcGISPro"
+
+    if (-not(Test-Path $arcgisProRegKey)) {
+        return $null
+    }
+
+    $condaEnv = Get-ItemProperty -Path $arcgisProRegKey -Name "PythonCondaEnv" -ErrorAction "SilentlyContinue"
+    $pythonRoot = Get-ItemProperty -Path $arcgisProRegKey -Name "PythonCondaRoot" -ErrorAction "SilentlyContinue"
+
+    if ((-not $condaEnv) -or (-not $pythonRoot)) {
+        return $null
+    }
+
+    $pythonInstallDir = Join-Path -Path (Join-Path -Path $pythonRoot.PythonCondaRoot -ChildPath "envs") -ChildPath $condaEnv.PythonCondaEnv
+    $pythonExecutable = Join-Path -path $pythonInstallDir -ChildPath "python.exe"
+
+    if (-not(Test-Path $pythonExecutable)) {
+        return $null
+    }
+
+    # format is "Platform|Tag|Version"
+    $pythonInfoCommand = 'import platform; import sys; import sysconfig; print(""{}|{}|{}"".format(sysconfig.get_platform(), sys.winver, platform.python_version()))'
+    $pythonInfo = (& $pythonExecutable -E -c $pythonInfoCommand).Split("|")
+
+    $company = "Esri"
+    $companyDisplayName = "Esri Inc."
+    $platform = if ($pythonInfo[0] -eq "win-amd64") { "64" } elseif ($pythonInfo[0] -eq "win32") { "32" } else { $null }
+    $tag = $pythonInfo[1]
+    $tagDisplayName = "Python {0} ({1}-bit)" -f $tag, $platform
+    $version = $pythonInfo[2]
+    $name = "{0} {1}" -f $companyDisplayName, $tagDisplayName
+    $scriptsPath = Join-Path $pythonInstallDir "Scripts"
+
+    $arcgisProPython = New-Object -TypeName PSObject -Prop (@{
+            "Company"            = $company;
+            "CompanyDisplayName" = $companyDisplayName;
+            "InstallPath"        = $pythonInstallDir;
+            "Executable"         = $pythonExecutable;
+            "Tag"                = $tag;
+            "TagDisplayName"     = $tagDisplayName;
+            "Platform"           = $platform;
+            "Version"            = $version;
+            "Scope"              = "AllUsers";
+            "Name"               = $name;
+            "ScriptsPath"        = $scriptsPath;
+        })
+
+    return setPythonVersionStandardMembers $arcgisProPython
+}
+
+function getPep514Pythons() {
+    $pythons = New-Object System.Collections.Generic.List[PSObject]
+
+    $regKeyLocations = (
+        @{
+            path  = "HKCU\Software\Python\"
+            scope = "CurrentUser"
+        },
+        @{
+            path  = "HKLM\Software\Python\"
+            scope = "AllUsers"
+        }
+    )
+
+    if (is64Bit) {
+        $regKeyLocations += @{
+            path  = "HKLM\SOFTWARE\Wow6432Node\Python\"
+            scope = "AllUsers"
+        }
+    }
+
+    foreach ($location in $regKeyLocations) {
+        $companyKeys = Get-ChildItem -Path "Registry::$($location.path)" -ErrorAction "SilentlyContinue"
+
+        foreach ($companyKey in $companyKeys) {
+
+            if ($companyKey.PSChildName -eq "PyLauncher") {
+                # PyLauncher should be ignored
+                continue
+            }
+
+            $tagKeys = Get-ChildItem -Path $companyKey.PSPath -ErrorAction "SilentlyContinue"
+
+            foreach ($tagKey in $tagKeys) {
+                if (Test-Path (Join-Path $tagKey.PSPath "\InstallPath")) {
+                    # tests if a valid install actually exists, uninstalled version can leave the Company/Tag structure
+                    $pythons.Add((createPep514PythonVersion $tagKey $location.scope))
+                }
+            }
+        }
+    }
+
+    $pythons
 }
 
 function getPythonCommand([Microsoft.Win32.RegistryKey]$installPathKey) {
@@ -454,17 +515,26 @@ function getPythonCommand([Microsoft.Win32.RegistryKey]$installPathKey) {
 }
 
 function getPythonVersion([System.Management.Automation.ApplicationInfo]$executablePath) {
-    if ($executablePath -eq $null) {
+    if ($null -eq $executablePath) {
         $null
     }
     else {
-        & $executablePath -E -c 'from sys import version_info; print(""{0}.{1}.{2}"".format(version_info[0], version_info[1], version_info[2]))'
+        & $executablePath -E -c 'import platform; print(platform.python_version())'
     }
 }
 
 function is64Bit {
     # Check if this machine is 64-bit
     ((Get-CimInstance Win32_OperatingSystem).OSArchitecture -match '64-bit')
+}
+
+function setPythonVersionStandardMembers($pythonVersion) {
+    $defaultProperties = @("Name", "Company", "Tag", "Version", "Platform", "Scope")
+    $defaultDisplayPropertySet = New-Object System.Management.Automation.PSPropertySet("DefaultDisplayPropertySet", [string[]]$defaultProperties)
+    $PSStandardMembers = [System.Management.Automation.PSMemberInfo[]]@($defaultDisplayPropertySet)
+    $pythonVersion | Add-Member MemberSet PSStandardMembers $PSStandardMembers
+
+    $pythonVersion
 }
 
 Export-ModuleMember "*-*"
