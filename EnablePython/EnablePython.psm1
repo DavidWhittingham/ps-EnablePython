@@ -1,10 +1,7 @@
 Set-StrictMode -Version 2.0
 
-$OLD_ENV_PATH = $null
-$OLD_ENV_PYTHONHOME = $null
-$OLD_ENV_PYTHONUSERBASE = $null
-$RESTORE_ENV_VARS = $false
-$RESTORE_USER_BASE = $false
+$ENV_VAR_BACKUP = @{}
+$PROMPT_FUNCTION = $null
 
 function Disable-Python {
     <#
@@ -33,21 +30,8 @@ from the virtualenv activate.ps1' script).
             deactivate
         }
 
-        if ($script:RESTORE_ENV_VARS -eq $true) {
-            # restore the original path
-            $Env:PATH = $script:OLD_ENV_PATH
-
-            # restore the original PYTHONHOME
-            $Env:PYTHONHOME = $script:OLD_ENV_PYTHONHOME
-
-            if ($script:RESTORE_USER_BASE -eq $true) {
-                # restore the original PYTHONUSERBASE
-                $Env:PYTHONUSERBASE = $script:OLD_ENV_PYTHONUSERBASE
-                $script:RESTORE_USER_BASE = $false
-            }
-
-            $script:RESTORE_ENV_VARS = $false
-        }
+        disableConda
+        restoreEnvVars
     }
 }
 
@@ -185,31 +169,30 @@ https://github.com/DavidWhittingham/ps-EnablePython
 
         $foundVersion = $pythons[0]
 
-        # Let EnablePython know it needs to restore the original environment variables on disabling Python
-        $script:RESTORE_ENV_VARS = $true
-
         # Save the existing path variable, then set the new path variable with the additional directories pre-pended.
         # Putting them at the start ensures the specified Python version will be the first one found (in case a Python
         # installation is already in the PATh variable).
-        $script:OLD_ENV_PATH = $Env:PATH
-        $Env:PATH = "$($foundVersion.InstallPath);$($foundVersion.ScriptsPath);$script:OLD_ENV_PATH"
+        $script:ENV_VAR_BACKUP["PATH"] = $Env:PATH
+        $Env:PATH = "$($foundVersion.InstallPath);$($foundVersion.ScriptsPath);$Env:PATH"
 
         # Save the existing PYTHONHOME variable, then ensure it is cleared so that the activated Python doesn't go off
         # looking at an incorrect home
-        $script:OLD_ENV_PYTHONHOME = $Env:PYTHONHOME
+        $script:ENV_VAR_BACKUP["PYTHONHOME"] = $Env:PYTHONHOME
         $Env:PYTHONHOME = $PythonHome
 
         # If configured to separate user base by platform, set a custom user base
         if ($NoPlatformUserBase -eq $false) {
-            $script:OLD_ENV_PYTHONUSERBASE = $Env:PYTHONUSERBASE
+            $script:ENV_VAR_BACKUP["PYTHONUSERBASE"] = $Env:PYTHONUSERBASE
             $Env:PYTHONUSERBASE = Join-Path -Path (Join-Path -Path $Env:APPDATA -ChildPath "EnablePython") `
                 -ChildPath ("x86-{0}" -f $foundVersion.Platform)
-            $script:RESTORE_USER_BASE = $true
         }
 
         # Get the user scripts path, add it to PATH as well
         $userScriptsPath = & $foundVersion.Executable -E -c 'import sysconfig; print(sysconfig.get_path(""scripts"", scheme=""nt_user""))'
         $Env:PATH = "$userScriptsPath;$Env:Path"
+
+        # attempt to enable conda
+        enableConda $foundVersion #-ErrorAction SilentlyContinue
 
         Write-Information """$($foundVersion.Name)"" has been enabled." -InformationAction Continue
     }
@@ -402,6 +385,67 @@ function createPep514PythonVersion([Microsoft.Win32.RegistryKey]$tagKey, [string
     $obj
 }
 
+function disableConda() {
+    if (-not(Get-Module -Name "Conda")) {
+        # do nothing if no Conda module loaded
+        return
+    }
+
+    # Remove the Conda module that has been added
+    Remove-Module -Name "Conda"
+
+    # Restore the backup prompt, with a basic prompt fallback
+    if ($null -ne $script:PROMPT_FUNCTION) {
+        $promptFunction = $script:PROMPT_FUNCTION
+    }
+    else {
+        $promptFunction = {
+            "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) ";
+        }
+    }
+    New-Item -Path function: -Name "global:prompt" -Value $promptFunction -Force > $null
+    $script:PROMPT_FUNCTION = $null
+}
+
+function enableConda($pythonVersion) {
+    $condaPath = Join-Path $pythonVersion.InstallPath "Scripts\conda.exe"
+
+    if (-not(Test-Path $condaPath)) {
+        return
+    }
+
+    # test is the Conda PS module exists, if so, try to activate Conda
+    $condaPsModPath = Join-Path "$($pythonVersion.InstallPath)" "\shell\condabin\Conda.psm1"
+    if (-not(Test-Path $condaPsModPath)) {
+        return
+    }
+
+    # Conda messes with the PS prompt, backup it up so that we can restore it later
+    $script:PROMPT_FUNCTION = Get-Item Function:\prompt
+
+    # backup the current state of conda-related environment variables
+    $script:ENV_VAR_BACKUP["CONDA_EXE"] = $Env:CONDA_EXE
+    $script:ENV_VAR_BACKUP["_CE_M"] = $Env:_CE_M
+    $script:ENV_VAR_BACKUP["_CE_CONDA"] = $Env:_CE_CONDA
+    $script:ENV_VAR_BACKUP["_CONDA_ROOT"] = $Env:_CONDA_ROOT
+    $script:ENV_VAR_BACKUP["_CONDA_EXE"] = $Env:_CONDA_EXE
+    $script:ENV_VAR_BACKUP["CONDA_DEFAULT_ENV"] = $Env:CONDA_DEFAULT_ENV
+    $script:ENV_VAR_BACKUP["CONDA_PREFIX"] = $Env:CONDA_PREFIX
+    $script:ENV_VAR_BACKUP["CONDA_PROMPT_MODIFIER"] = $Env:CONDA_PROMPT_MODIFIER
+    $script:ENV_VAR_BACKUP["CONDA_PYTHON_EXE"] = $Env:CONDA_PYTHON_EXE
+    $script:ENV_VAR_BACKUP["CONDA_SHLVL"] = $Env:CONDA_SHLVL
+
+    # set environment variables for conda activation
+    $Env:CONDA_EXE = "$condaPath"
+    $Env:_CONDA_ROOT = "$($pythonVersion.InstallPath)"
+    $Env:_CONDA_EXE = "$condaPath"
+
+    Import-Module $condaPsModPath -Global
+    conda activate
+
+    Add-CondaEnvironmentToPrompt
+}
+
 function getArcGisProPython() {
     $arcgisProRegKey = "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\ESRI\ArcGISPro"
 
@@ -526,6 +570,15 @@ function getPythonVersion([System.Management.Automation.ApplicationInfo]$executa
 function is64Bit {
     # Check if this machine is 64-bit
     ((Get-CimInstance Win32_OperatingSystem).OSArchitecture -match '64-bit')
+}
+
+function restoreEnvVars {
+    foreach ($nvp in $script:ENV_VAR_BACKUP.GetEnumerator()) {
+        $varName = $nvp.Name
+        Set-Item "env:$varName" $nvp.Value
+    }
+
+    $script:ENV_VAR_BACKUP = @{}
 }
 
 function setPythonVersionStandardMembers($pythonVersion) {
