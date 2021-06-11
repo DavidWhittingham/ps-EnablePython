@@ -154,7 +154,7 @@ https://github.com/DavidWhittingham/ps-EnablePython
             $getPythonArgs.Scope = $Scope
         }
 
-        [array]$pythons = Get-Python @getPythonArgs
+        $pythons = Get-Python @getPythonArgs
 
         if (!$pythons) {
             throw "No Python distribution could be found matching those search criteria."
@@ -283,7 +283,7 @@ https://github.com/DavidWhittingham/ps-EnablePython
         $arcGisProPython = getArcGisProPython
 
         if ($null -ne $arcGisProPython) {
-            $pythons = $pythons + @($arcGisProPython)
+            $pythons.Add($arcGisProPython) | Out-Null
         }
 
         # Sort the list of Python versions
@@ -332,7 +332,7 @@ https://github.com/DavidWhittingham/ps-EnablePython
         }
 
         # Sort PythonCore first
-        @(
+        Write-Output -NoEnumerate @(
             @($pythons | Where-Object { $_.Company -eq "PythonCore" } | Sort-Object -Property $sortProperties) +
             @($pythons | Where-Object { $_.Company -ne "PythonCore" } | Sort-Object -Property $sortProperties)
         )
@@ -498,6 +498,8 @@ function getArcGisProPython() {
 }
 
 function getPep514Pythons() {
+    [OutputType([System.Collections.Generic.List[PSObject]])]
+
     $pythons = New-Object System.Collections.Generic.List[PSObject]
 
     $regKeyLocations = (
@@ -533,13 +535,13 @@ function getPep514Pythons() {
             foreach ($tagKey in $tagKeys) {
                 if (Test-Path (Join-Path $tagKey.PSPath "\InstallPath")) {
                     # tests if a valid install actually exists, uninstalled version can leave the Company/Tag structure
-                    $pythons.Add((createPep514PythonVersion $tagKey $location.scope))
+                    $pythons.Add((createPep514PythonVersion $tagKey $location.scope)) | Out-Null
                 }
             }
         }
     }
 
-    $pythons
+    Write-Output -NoEnumerate $pythons
 }
 
 function getPythonCommand([Microsoft.Win32.RegistryKey]$installPathKey) {
