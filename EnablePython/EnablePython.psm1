@@ -188,7 +188,7 @@ https://github.com/DavidWhittingham/ps-EnablePython
         }
 
         # Get the user scripts path, add it to PATH as well
-        $userScriptsPath = & $foundVersion.Executable -E -c 'import sysconfig; print(sysconfig.get_path(""scripts"", scheme=""nt_user""))'
+        $userScriptsPath = & $foundVersion.Executable -E -c 'import sysconfig; print(sysconfig.get_path(''scripts'', scheme=''nt_user''))'
         $Env:PATH = "$userScriptsPath;$Env:Path"
 
         # attempt to enable conda
@@ -468,7 +468,7 @@ function getArcGisProPython() {
     }
 
     # format is "Platform|Tag|Version"
-    $pythonInfoCommand = 'import platform; import sys; import sysconfig; print("{}|{}|{}".format(sysconfig.get_platform(), sys.winver, platform.python_version()))'
+    $pythonInfoCommand = 'import platform; import sys; import sysconfig; print(''{}|{}|{}''.format(sysconfig.get_platform(), sys.winver, platform.python_version()))'
     $pythonInfo = (& $pythonExecutable -E -c $pythonInfoCommand).Split("|")
 
     $company = "Esri"
