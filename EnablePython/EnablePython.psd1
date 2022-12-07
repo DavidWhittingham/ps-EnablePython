@@ -12,7 +12,7 @@
     RootModule        = 'EnablePython.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '2.3.1'
+    ModuleVersion     = '2.3.2'
 
     # ID used to uniquely identify this module
     GUID              = '20232e29-56bc-4024-823b-afe3994c9365'
@@ -24,7 +24,7 @@
     # CompanyName = ''
 
     # Copyright statement for this module
-    Copyright         = 'Copyright (c) 2018-2021 David Whittingham'
+    Copyright         = 'Copyright (c) 2018-2022 David Whittingham'
 
     # Description of the functionality provided by this module
     Description       = 'PowerShell advanced functions for enabling different versions of Python.'

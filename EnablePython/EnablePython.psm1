@@ -468,7 +468,7 @@ function getArcGisProPython() {
     }
 
     # format is "Platform|Tag|Version"
-    $pythonInfoCommand = 'import platform; import sys; import sysconfig; print(""{}|{}|{}"".format(sysconfig.get_platform(), sys.winver, platform.python_version()))'
+    $pythonInfoCommand = 'import platform; import sys; import sysconfig; print("{}|{}|{}".format(sysconfig.get_platform(), sys.winver, platform.python_version()))'
     $pythonInfo = (& $pythonExecutable -E -c $pythonInfoCommand).Split("|")
 
     $company = "Esri"
